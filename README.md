@@ -1,8 +1,10 @@
 # LET MONITOR
 
-一个基于 Workers AI 的 LowEndTalk/LowEndSpirt 新帖/评论监控。获取到信息后，交由 AI 进行翻译、总结、筛选，并推送到 Telegram 等不同渠道。
-
 DEMO：https://t.me/letleblessub
+
+详细教程：https://vpslog.org/projects/let-monitor/
+
+一个基于 Workers AI 的 LowEndTalk/LowEndSpirt 新帖/评论监控。获取到信息后，交由 AI 进行翻译、总结、筛选，并推送到 Telegram 等不同渠道。
 
 ## 功能
 
@@ -26,7 +28,7 @@ cd let-monitor
 docker compose up -d
 ```
 
-访问`8081`即可。需要提供 telegram 相关信息、Cloudflare Workers AI 凭据。如下图获取：
+访问`5556`即可。需要提供 telegram 相关信息、Cloudflare Workers AI 凭据。如下图获取：
 
 ![alt text](image.png)
 
