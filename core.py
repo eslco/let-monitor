@@ -124,8 +124,6 @@ class ForumMonitor:
         self.threads.insert_one(thread)
         # 发布时间 24h 内才推送
         if (datetime.now(timezone.utc) - thread['pub_date'].replace(tzinfo=timezone.utc)).total_seconds() <= 86400:
-            if self.config.get('use_keywords_filter', False) and (not self.keywords_filter(thread['description'])):
-                    return
             if self.config.get('use_ai_filter', False):
                 ai_description = self.ai_filter(thread['description'],self.config['thread_prompt'])
                 if ai_description == "FALSE":
