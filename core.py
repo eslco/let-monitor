@@ -10,7 +10,7 @@ import cfscrape
 import shutil
 from dotenv import load_dotenv
 from urllib.parse import urlparse
-
+from msgparse import thread_message, comment_message
 # Load variables from data/.env
 load_dotenv('data/.env')
 
@@ -132,15 +132,7 @@ class ForumMonitor:
                     return
             else:
                 ai_description = ""
-            msg = (
-                f"{thread['domain'].upper()} 新促销\n"
-                f"标题：{thread['title']}\n"
-                f"作者：{thread['creator']}\n"
-                f"时间：{thread['pub_date'].strftime('%Y/%m/%d %H:%M')}\n\n"
-                f"{thread['description'][:200]}...\n\n"
-                f"{ai_description[:200]}...\n\n" if ai_description else ""
-                f"{thread['link']}"
-            )
+            msg = thread_message(thread, ai_description)
             self.notifier.send_message(msg)
 
     # 新增：直接抓取单个线程页面并解析成 thread_data 格式
@@ -249,7 +241,7 @@ class ForumMonitor:
                 'comment_id': f"{thread['domain']}_{cid}",
                 'thread_url': thread['link'],
                 'author': author,
-                'message': msg[:200],
+                'message': msg[:200].strip(),
                 'created_at': datetime.strptime(created, "%Y-%m-%dT%H:%M:%S+00:00"),
                 'created_at_recorded': datetime.now(timezone.utc),
                 'url': f"{thread['link']}/comment/{cid}/#Comment_{cid}"
@@ -275,14 +267,7 @@ class ForumMonitor:
                     return
             else:
                 ai_description = ""
-            msg = (
-                f"{thread['domain'].upper()} 新评论\n"
-                f"作者：{comment['author']}\n"
-                f"时间：{comment['created_at'].strftime('%Y/%m/%d %H:%M')}\n\n"
-                f"{comment['message'][:200]}...\n\n"
-                f"{ai_description[:200]}...\n\n" if ai_description else ""
-                f"{comment['url']}"
-            )
+            msg = comment_message(thread, comment, ai_description)
             self.notifier.send_message(msg)
 
     # -------- 主循环 --------

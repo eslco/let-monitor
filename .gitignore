@@ -5,3 +5,4 @@ let-monitor
 /venv
 .env
 core copy.py
+post.md
