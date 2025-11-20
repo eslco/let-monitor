@@ -7,6 +7,7 @@ services:
       - ./data:/app/data  # 挂载数据目录
     environment:
       - MONGO_HOST=mongodb://mongo:27017/
+      - ACCESS_TOKEN=your_access_token_here  # 替换为你的访问令牌，登录网页的时候需要输入
     depends_on:
       - mongo
     restart: unless-stopped  # 自动重启策略
