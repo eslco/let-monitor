@@ -21,10 +21,7 @@ venv.bak/
 *~
 .DS_Store
 Thumbs.db
-core copy.py
 image.png
 model_compare.md
 README.md
 changelog.md
-send.py
-example.json
