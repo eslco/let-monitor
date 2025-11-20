@@ -7,12 +7,12 @@ services:
       - ./data:/app/data  # 挂载数据目录
     environment:
       - MONGO_HOST=mongodb://mongo:27017/
-    # depends_on:
-    #   - mongo
+    depends_on:
+      - mongo
     restart: unless-stopped  # 自动重启策略
 
-  # mongo:
-  #   image: mongo:latest  # 使用最新版 MongoDB
-  #   volumes:
-  #     - ./data/db:/data/db  # 持久化数据库数据
-  #   restart: unless-stopped
+  mongo:
+    image: mongo:latest  # 使用最新版 MongoDB
+    volumes:
+      - ./data/db:/data/db  # 持久化数据库数据
+    restart: unless-stopped
