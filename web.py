@@ -2,6 +2,12 @@ from flask import Flask, request, jsonify, render_template
 from core import ForumMonitor
 import json
 import threading
+from dotenv import load_dotenv
+import os
+from functools import wraps
+
+load_dotenv('data/.env')
+expected_token = os.getenv('ACCESS_TOKEN', 'default_token')
 
 app = Flask(__name__)
 monitor = ForumMonitor()
@@ -10,11 +16,22 @@ monitor = ForumMonitor()
 app.jinja_env.variable_start_string = '<<'
 app.jinja_env.variable_end_string = '>>'
 
+# 认证装饰器
+def require_auth(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        token = request.headers.get('Authorization')
+        if not token or token != f"Bearer {expected_token}":
+            return jsonify({"status": "error", "message": "Unauthorized"}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
 @app.route('/')
 def index():
     return render_template('index.html')
 
 @app.route('/api/config', methods=['GET', 'POST'])
+@require_auth
 def config():
     if request.method == 'POST':
         data = request.json
@@ -24,6 +41,22 @@ def config():
         return jsonify({"status": "success", "message": "Config updated"})
     else:
         return jsonify(monitor.config)
+
+@app.route('/api/insert_thread', methods=['POST'])
+@require_auth
+def insert_thread():
+    data = request.json
+    url = data.get('url')
+    if not url:
+        return jsonify({"status": "error", "message": "URL is required"}), 400
+
+    try:
+        result = monitor.fetch_thread_page(url)
+        if result is None:
+            return jsonify({"status": "error", "message": "Failed to fetch or parse thread"}), 500
+        return jsonify({"status": "success", "message": "Thread inserted successfully"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
     thread = threading.Thread(target=monitor.start_monitoring)
