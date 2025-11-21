@@ -42,21 +42,6 @@ def config():
     else:
         return jsonify(monitor.config)
 
-@app.route('/api/insert_thread', methods=['POST'])
-@require_auth
-def insert_thread():
-    data = request.json
-    url = data.get('url')
-    if not url:
-        return jsonify({"status": "error", "message": "URL is required"}), 400
-
-    try:
-        result = monitor.fetch_thread_page(url)
-        if result is None:
-            return jsonify({"status": "error", "message": "Failed to fetch or parse thread"}), 500
-        return jsonify({"status": "success", "message": "Thread inserted successfully"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
     thread = threading.Thread(target=monitor.start_monitoring)

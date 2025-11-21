@@ -5,8 +5,8 @@ def thread_message(thread, ai_description):
         f"标题：{thread['title']}\n"
         f"作者：{thread['creator']}\n"
         f"时间：{thread['pub_date'].strftime('%Y/%m/%d %H:%M')}\n\n"
-        f"{thread['description'][:200].strip()}...\n\n"
-        + (f"{ai_description[:200].strip()}...\n\n" if ai_description else "")
+        # f"{thread['description'][:200].strip()}...\n\n"
+        + (f"{ai_description[:200].strip()}{"..." if len(ai_description)>200 else ''}\n\n" if ai_description else "")
         + f"{thread['link']}"
     )
     return msg

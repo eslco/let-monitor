@@ -68,14 +68,15 @@ class ForumMonitor:
         return response.json()
 
     def ai_filter(self, description, prompt):
+        print('Using AI')
         inputs = [
             { "role": "system", "content": prompt},
             { "role": "user", "content": description}
         ]
         output = self.workers_ai_run(self.config['model'], inputs) # "@cf/qwen/qwen1.5-14b-chat-awq"
-        # print(output)
-        return output['result']['response'].split('END')[0]
-
+        print(output)
+        # return output['result']['response'].split('END')[0]
+        return output['result']['choices'][0]['message']['content'].split('END')[0]
 
     # -------- RSS LET/LES -----------
     def check_lets(self, urls):
@@ -89,8 +90,19 @@ class ForumMonitor:
                 print(f"获取 {domain} 失败")
                 return
             soup = BeautifulSoup(res.text, 'xml')
-            for item in soup.find_all('item')[:3]:
+            for item in soup.find_all('item')[:6]:
                 self.convert_rss(item, domain, category)
+
+    # -------- EXTRA URLS -----------
+    def check_extra_urls(self, urls):
+        for url in urls:
+            print(f"[{self.current_time()}] 检查 extra URL: {url}")
+            # 检查数据库是否已存在
+            thread = self.threads.find_one({'link': url})
+            if thread:
+                fetch_comments(thread)
+            # 不存在则抓取并插入
+            self.fetch_thread_page(url)
 
     # 将 RSS item 转成 thread_data
     def convert_rss(self, item, domain, category):
@@ -274,10 +286,14 @@ class ForumMonitor:
         freq = self.config.get('frequency', 600)
 
         while True:
-            self.check_lets(urls=self.config.get('urls', [
-                "https://lowendspirit.com/categories/offers/feed.rss",
-                "https://lowendtalk.com/categories/offers/feed.rss"
-            ]))
+            self.check_extra_urls(urls=self.config.get('extra_urls', []))
+            if not self.config.get('only_extra', False):
+                # 处理 RSS 和 extra URLs
+                self.check_lets(urls=self.config.get('urls', [
+                    "https://lowendspirit.com/categories/offers/feed.rss",
+                    "https://lowendtalk.com/categories/offers/feed.rss"
+                ]))
+            print(f"[{self.current_time()}] 遍历结束，休眠 {freq} 秒...")
             time.sleep(freq)
 
     # 外部重载配置方法
