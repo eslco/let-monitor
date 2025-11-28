@@ -2,23 +2,13 @@ import requests
 import json
 
 class NotificationSender:
-    def __init__(self, config_path='data/config.json'):
-        self.config_path = config_path
-        self.load_config()
-
-    # 加载配置文件
-    def load_config(self):
-        try:
-            with open(self.config_path, 'r') as f:
-                self.config = json.load(f)
-        except Exception as e:
-            print(f"加载配置失败: {e}")
-            self.config = {}
+    def __init__(self, config):
+        self.config = config
 
     # 发送 Telegram 消息
     def send_telegram_message(self, message):
-        telegram_token = self.config.get('config', {}).get('telegrambot')
-        chat_id = self.config.get('config', {}).get('chat_id')
+        telegram_token = self.config.get('telegrambot')
+        chat_id = self.config.get('chat_id')
         if telegram_token and chat_id:
             url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
             payload = {
@@ -38,7 +28,7 @@ class NotificationSender:
 
     # 发送微信消息
     def send_wechat_message(self, message):
-        wechat_key = self.config.get('config', {}).get('wechat_key')
+        wechat_key = self.config.get('wechat_key')
         if wechat_key:
             url = f"https://xizhi.qqoq.net/{wechat_key}.send"
             payload = {
@@ -58,7 +48,7 @@ class NotificationSender:
 
     # 发送自定义通知
     def send_custom_message(self, message):
-        custom_url = self.config.get('config', {}).get('custom_url')
+        custom_url = self.config.get('custom_url')
         if custom_url:
             custom_url_with_message = custom_url.replace("{message}", message)
             try:
@@ -76,7 +66,7 @@ class NotificationSender:
     def send_message(self, message):
         print(message)
         # return None
-        notice_type = self.config.get('config', {}).get('notice_type', 'telegram')
+        notice_type = self.config.get('notice_type', 'telegram')
         
         if notice_type == 'telegram':
             self.send_telegram_message(message)

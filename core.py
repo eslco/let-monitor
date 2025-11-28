@@ -11,6 +11,9 @@ import shutil
 from dotenv import load_dotenv
 from urllib.parse import urlparse
 from msgparse import thread_message, comment_message
+import curl_cffi
+from filter import Filter
+
 # Load variables from data/.env
 load_dotenv('data/.env')
 
@@ -23,7 +26,7 @@ class ForumMonitor:
         self.config_path = config_path
         self.mongo_host = os.getenv("MONGO_HOST", 'mongodb://localhost:27017/')
         self.load_config()
-
+        
         self.mongo_client = MongoClient(self.mongo_host)
         self.db = self.mongo_client['forum_monitor']
         self.threads = self.db['threads']
@@ -43,40 +46,10 @@ class ForumMonitor:
             shutil.copy('example.json', self.config_path)
         with open(self.config_path, 'r') as f:
             self.config = json.load(f)['config']
-        self.notifier = NotificationSender(self.config_path)
+        self.notifier = NotificationSender(self.config)
+        self.filter = Filter(self.config)
         print("配置文件加载成功")
 
-    def keywords_filter(self, text):
-        keywords_rule = self.config.get('keywords_rule', '')
-        if not keywords_rule.strip():
-            return False
-        or_groups = [group.strip() for group in keywords_rule.split(',')]
-        for group in or_groups:
-            # Split by + for AND keywords
-            and_keywords = [kw.strip() for kw in group.split('+')]
-            # Check if all AND keywords are in the text (case-insensitive)
-            if all(kw.lower() in text.lower() for kw in and_keywords):
-                return True
-        return False
-
-
-    # -------- AI 相关功能 --------
-    def workers_ai_run(self, model, inputs):
-        headers = {"Authorization": f"Bearer {self.config['cf_token']}"}
-        input = { "messages": inputs }
-        response = requests.post(f"https://api.cloudflare.com/client/v4/accounts/{self.config['cf_account_id']}/ai/run/{model}", headers=headers, json=input)
-        return response.json()
-
-    def ai_filter(self, description, prompt):
-        print('Using AI')
-        inputs = [
-            { "role": "system", "content": prompt},
-            { "role": "user", "content": description}
-        ]
-        output = self.workers_ai_run(self.config['model'], inputs) # "@cf/qwen/qwen1.5-14b-chat-awq"
-        print(output)
-        # return output['result']['response'].split('END')[0]
-        return output['result']['choices'][0]['message']['content'].split('END')[0]
 
     # -------- RSS LET/LES -----------
     def check_lets(self, urls):
@@ -100,7 +73,7 @@ class ForumMonitor:
             # 检查数据库是否已存在
             thread = self.threads.find_one({'link': url})
             if thread:
-                fetch_comments(thread)
+                self.fetch_comments(thread)
             # 不存在则抓取并插入
             self.fetch_thread_page(url)
 
@@ -137,8 +110,8 @@ class ForumMonitor:
         # 发布时间 24h 内才推送
         if (datetime.now(timezone.utc) - thread['pub_date'].replace(tzinfo=timezone.utc)).total_seconds() <= 86400:
             if self.config.get('use_ai_filter', False):
-                ai_description = self.ai_filter(thread['description'],self.config['thread_prompt'])
-                if ai_description == "FALSE":
+                ai_description = self.filter.ai_filter(thread['description'],self.config['thread_prompt'])
+                if 'false' in ai_description.lower():
                     return
             else:
                 ai_description = ""
@@ -147,7 +120,8 @@ class ForumMonitor:
 
     # 新增：直接抓取单个线程页面并解析成 thread_data 格式
     def fetch_thread_page(self, url):
-        res = scraper.get(url)
+        # res = scraper.get(url)
+        res = curl_cffi.get(url,impersonate="chrome124")
         if res.status_code != 200:
             print(f"获取页面失败 {url} 状态码 {res.status_code}")
             return None
@@ -184,7 +158,7 @@ class ForumMonitor:
         description = desc_el.get_text("\n", strip=True) if desc_el else ""
 
         parsed = urlparse(url)
-        domain = parsed.netloc
+        domain = url.split("//")[1].split(".")[0]
 
         thread_data = {
             "domain": domain,
@@ -205,19 +179,24 @@ class ForumMonitor:
     # -------- 评论抓取统一逻辑（LET / LES 一样） --------
     def fetch_comments(self, thread):
         last_page = self.threads.find_one({'link': thread['link']}).get('last_page', 1)
-
+        if last_page < 1:
+            last_page = 1
         while True:
             page_url = f"{thread['link']}/p{last_page}"
-            res = scraper.get(page_url)
-
+            print(f"获取评论页面 {page_url} ...")
+            # res = scraper.get(page_url)
+            res = curl_cffi.get(page_url,impersonate="chrome124")
             if res.status_code != 200:
-                # 更新 last_page
-                self.threads.update_one(
-                    {'link': thread['link']},
-                    {'$set': {'last_page': last_page - 1}}
-                )
-                break
-
+                if res.status_code == 404:
+                    # 更新 last_page
+                    self.threads.update_one(
+                        {'link': thread['link']},
+                        {'$set': {'last_page': last_page-1}}
+                    )
+                    break
+                else:
+                    print(f"获取评论失败 {page_url} 状态码 {res.status_code}")
+                    break
             self.parse_comments(res.text, thread)
             last_page += 1
             time.sleep(1)
@@ -235,9 +214,29 @@ class ForumMonitor:
 
             author = it.find('a', class_='Username').text
             role = it.find('span', class_='RoleTitle').text if it.find('span', class_='RoleTitle') else None
-            msg = it.find('div', class_='Message').text.strip()
+            # msg = it.find('div', class_='Message').text.strip()
+            message_div = it.find('div', class_='Message')
+            if message_div:
+                msg_parts = []
+                for element in message_div.children:
+                    if element.name == 'blockquote' and 'UserQuote' in element.get('class', []):
+                        # 这是引用内容
+                        quote_text = element.get_text(strip=True)
+                        msg_parts.append(f"[Quote]{quote_text}[/Quote]")
+                    elif element.name and element.name in ['p', 'div']:
+                        # 这是新内容
+                        text = element.get_text(strip=True)
+                        if text:
+                            msg_parts.append(text)
+                    elif isinstance(element, str):
+                        # 文本节点
+                        text = element.strip()
+                        if text:
+                            msg_parts.append(text)
+                msg = '\n'.join(msg_parts)
+            else:
+                msg = ""
             created = it.find('time')['datetime']
-
             if self.config.get('comment_filter') == 'by_role':
                 # by_role 过滤器，为 None '' 或者只有 member 则跳过
                 if not role or role.strip().lower() == 'member':
@@ -254,7 +253,7 @@ class ForumMonitor:
                 'message': msg[:200].strip(),
                 'created_at': datetime.strptime(created, "%Y-%m-%dT%H:%M:%S+00:00"),
                 'created_at_recorded': datetime.now(timezone.utc),
-                'url': f"{thread['link']}/comment/{cid}/#Comment_{cid}"
+                'url': f"https://{thread['domain']}.com/discussion/comment/{cid}/#Comment_{cid}"
             }
 
             self.handle_comment(comment, thread)
@@ -266,14 +265,13 @@ class ForumMonitor:
 
         self.comments.update_one({'comment_id': comment['comment_id']},
                                  {'$set': comment}, upsert=True)
-
         # 只推送 24 小时内的
         if (datetime.now(timezone.utc) - comment['created_at'].replace(tzinfo=timezone.utc)).total_seconds() <= 86400:
-            if self.config.get('use_keywords_filter', False) and (not self.keywords_filter(comment['message'])):
+            if self.config.get('use_keywords_filter', False) and (not self.filter.keywords_filter(comment['message'], self.config.get('keywords_rule', ''))):
                     return
             if self.config.get('use_ai_filter', False):
-                ai_description = self.ai_filter(comment['message'],self.config['comment_prompt'])
-                if ai_description == "FALSE":
+                ai_description = self.filter.ai_filter(comment['message'],self.config['comment_prompt'])
+                if 'false' in ai_description.lower():
                     return
             else:
                 ai_description = ""
