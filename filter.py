@@ -27,7 +27,7 @@ class Filter:
         return response.json()
 
     def ai_filter(self, description, prompt):
-        print('Using AI')
+        print('Using AI',description)
         inputs = [
             { "role": "system", "content": prompt},
             { "role": "user", "content": description}

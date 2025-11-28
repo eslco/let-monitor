@@ -6,3 +6,4 @@ cfscrape
 requests==2.28.2
 python-dotenv
 lxml
+curl_cffi
