@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 from msgparse import thread_message, comment_message
 import curl_cffi
 from filter import Filter
+from markdownify import markdownify as md
 
 # Load variables from data/.env
 load_dotenv('data/.env')
@@ -222,17 +223,14 @@ class ForumMonitor:
                     if element.name == 'blockquote' and 'UserQuote' in element.get('class', []):
                         # 这是引用内容
                         quote_text = element.get_text(strip=True)
-                        msg_parts.append(f"[Quote]{quote_text}[/Quote]")
-                    elif element.name and element.name in ['p', 'div']:
-                        # 这是新内容
-                        text = element.get_text(strip=True)
+                        # msg_parts.append(f"[Quote]{quote_text}[/Quote]")
+                        pass
+                    else:
+                        # 其他情况，直接获取文本
+                        text = md(str(element)).strip()
                         if text:
                             msg_parts.append(text)
-                    elif isinstance(element, str):
-                        # 文本节点
-                        text = element.strip()
-                        if text:
-                            msg_parts.append(text)
+
                 msg = '\n'.join(msg_parts)
             else:
                 msg = ""
@@ -250,12 +248,12 @@ class ForumMonitor:
                 'comment_id': f"{thread['domain']}_{cid}",
                 'thread_url': thread['link'],
                 'author': author,
-                'message': msg[:200].strip(),
+                'message': msg,
                 'created_at': datetime.strptime(created, "%Y-%m-%dT%H:%M:%S+00:00"),
                 'created_at_recorded': datetime.now(timezone.utc),
                 'url': f"https://{thread['domain']}.com/discussion/comment/{cid}/#Comment_{cid}"
             }
-
+            # time.sleep(1)
             self.handle_comment(comment, thread)
 
     # -------- 存储评论 + 通知 --------
@@ -284,16 +282,20 @@ class ForumMonitor:
         freq = self.config.get('frequency', 600)
 
         while True:
-            self.check_extra_urls(urls=self.config.get('extra_urls', []))
-            if not self.config.get('only_extra', False):
-                # 处理 RSS 和 extra URLs
-                self.check_lets(urls=self.config.get('urls', [
-                    "https://lowendspirit.com/categories/offers/feed.rss",
-                    "https://lowendtalk.com/categories/offers/feed.rss"
-                ]))
-            print(f"[{self.current_time()}] 遍历结束，休眠 {freq} 秒...")
-            time.sleep(freq)
-
+            try:
+                self.check_extra_urls(urls=self.config.get('extra_urls', []))
+                if not self.config.get('only_extra', False):
+                    # 处理 RSS 和 extra URLs
+                    self.check_lets(urls=self.config.get('urls', [
+                        "https://lowendspirit.com/categories/offers/feed.rss",
+                        "https://lowendtalk.com/categories/offers/feed.rss"
+                    ]))
+                print(f"[{self.current_time()}] 遍历结束，休眠 {freq} 秒...")
+                time.sleep(freq)
+            except Exception as e:
+                print(f"发生错误: {e}")
+                time.sleep(60)  
+                
     # 外部重载配置方法
     def reload(self):
         print("重新加载配置...")

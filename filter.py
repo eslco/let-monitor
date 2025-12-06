@@ -27,12 +27,20 @@ class Filter:
         return response.json()
 
     def ai_filter(self, description, prompt):
-        print('Using AI',description)
-        inputs = [
-            { "role": "system", "content": prompt},
-            { "role": "user", "content": description}
-        ]
-        output = self.workers_ai_run(self.config['model'], inputs) # "@cf/qwen/qwen1.5-14b-chat-awq"
-        print(output)
-        # return output['result']['response'].split('END')[0]
-        return output['result']['choices'][0]['message']['content'].split('END')[0]
+        while True:
+            try:
+                print('Using AI',description)
+                inputs = [
+                    { "role": "system", "content": prompt},
+                    { "role": "user", "content": description}
+                ]
+                output = self.workers_ai_run(self.config['model'], inputs) # "@cf/qwen/qwen1.5-14b-chat-awq"
+                print(output)
+                # return output['result']['response'].split('END')[0]
+
+                return output['result']['choices'][0]['message']['content'].split('END')[0]
+            except Exception as e:
+                print(e)
+                import time
+                time.sleep(10)       
+                continue
